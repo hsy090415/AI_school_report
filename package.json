@@ -1,0 +1,12 @@
+{
+  "name": "ai-school-report",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc -p tsconfig.build.json"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}
