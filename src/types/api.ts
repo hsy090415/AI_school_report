@@ -22,15 +22,31 @@ export interface GenerateActivityRecordResponse {
   usedEvidence: string[];
 }
 
+export type AiApiErrorCode =
+  | "INVALID_JSON"
+  | "INVALID_REQUEST"
+  | "INSUFFICIENT_EVIDENCE"
+  | "INVALID_AI_RESPONSE"
+  | "AI_SERVICE_ERROR";
+
+export interface AiApiErrorResponse {
+  error: {
+    code: AiApiErrorCode;
+    message: string;
+  };
+}
+
 export interface AiApiContract {
   "/api/analyze-report": {
     method: "POST";
     request: AnalyzeReportRequest;
     response: AnalyzeReportResponse;
+    error: AiApiErrorResponse;
   };
   "/api/generate-activity-record": {
     method: "POST";
     request: GenerateActivityRecordRequest;
     response: GenerateActivityRecordResponse;
+    error: AiApiErrorResponse;
   };
 }

@@ -4,6 +4,9 @@
     "noEmit": false,
     "outDir": "dist",
     "rootDir": "src",
-    "declaration": true
-  }
+    "declaration": true,
+    "plugins": []
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/app/**/*"]
 }
