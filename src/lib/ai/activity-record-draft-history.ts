@@ -12,18 +12,22 @@ export async function saveStandaloneActivityDraft(
   details: { activityCode: ActivityCode; activityId: string; topic: string },
   result: GenerateActivityRecordResponse,
 ): Promise<void> {
-  await mkdir(HISTORY_DIRECTORY, { recursive: true });
-  await appendFile(HISTORY_FILE, `${JSON.stringify({
-    id: randomUUID(),
-    createdAt: new Date().toISOString(),
-    source: "activity-record-api",
-    activityCode: details.activityCode,
-    activityId: details.activityId,
-    topic: details.topic,
-    maxLength: result.maxLength,
-    characterCount: result.characterCount,
-    draft: result.draft,
-  })}\n`, "utf8");
+  try {
+    await mkdir(HISTORY_DIRECTORY, { recursive: true });
+    await appendFile(HISTORY_FILE, `${JSON.stringify({
+      id: randomUUID(),
+      createdAt: new Date().toISOString(),
+      source: "activity-record-api",
+      activityCode: details.activityCode,
+      activityId: details.activityId,
+      topic: details.topic,
+      maxLength: result.maxLength,
+      characterCount: result.characterCount,
+      draft: result.draft,
+    })}\n`, "utf8");
+  } catch {
+    // 테스트 기록 저장 실패가 생성된 초안의 반환을 막지 않도록 한다.
+  }
 }
 
 export async function saveActivityRecordDraft(
