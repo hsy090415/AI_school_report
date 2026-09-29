@@ -21,10 +21,13 @@ import type {
   ReportAnalysis,
   Student,
 } from "../../types";
+import { ReportInputForm } from "./ReportInputForm";
+import { DNA_QUESTIONS } from "./report-form-content";
 
 type FlowStep = "home" | "students" | "activities" | "workspace";
 type AsyncStatus = "idle" | "loading" | "success" | "error";
 type ClassFilter = "all" | "2-1" | "2-2";
+const MAX_REPORT_LENGTH = 20_000;
 
 function requireMockItem<T>(item: T | undefined, label: string): T {
   if (!item) throw new Error(`교사 흐름에 필요한 ${label} mock 데이터가 없습니다.`);
@@ -65,6 +68,7 @@ export function TeacherFlow() {
   const [classFilter, setClassFilter] = useState<ClassFilter>("2-1");
   const [searchQuery, setSearchQuery] = useState("");
   const [reportText, setReportText] = useState("");
+  const [dnaAnswers, setDnaAnswers] = useState<string[]>(() => DNA_QUESTIONS.map(() => ""));
   const [analysis, setAnalysis] = useState<ReportAnalysis | null>(null);
   const [aiDraft, setAiDraft] = useState("");
   const [editorText, setEditorText] = useState("");
@@ -96,6 +100,27 @@ export function TeacherFlow() {
     [],
   );
 
+  const analysisInputText = [
+    reportText.trim(),
+    selectedActivity.code === "CAREER_DNA"
+      ? dnaAnswers
+          .map((answer, index) => answer.trim() ? `[DNA ${index + 1}차시 학생 답변] ${answer.trim()}` : "")
+          .filter(Boolean)
+          .join("\n\n")
+      : "",
+  ].filter(Boolean).join("\n\n");
+
+  function invalidateAnalysis() {
+    setAnalysis(null);
+    setAiDraft("");
+    setEditorText("");
+    setFinalText(null);
+    setAnalysisStatus("idle");
+    setDraftStatus("idle");
+    setSaveStatus("idle");
+    setErrorMessage("");
+  }
+
   function openWorkspace(activity = selectedActivity, student = selectedStudent) {
     const report = mockStudentReports.find(
       (item) => item.studentId === student.id && item.activityId === activity.id,
@@ -105,6 +130,7 @@ export function TeacherFlow() {
     );
 
     setReportText(report?.reportText ?? "");
+    setDnaAnswers(DNA_QUESTIONS.map(() => ""));
     setAnalysis(record?.analysis ?? null);
     setAiDraft(record?.aiDraft ?? "");
     setFinalText(record?.finalText ?? null);
@@ -118,7 +144,7 @@ export function TeacherFlow() {
   }
 
   async function analyzeCurrentReport() {
-    if (!reportText.trim()) return;
+    if (!analysisInputText || analysisInputText.length > MAX_REPORT_LENGTH || analysisStatus === "loading") return;
     setAnalysisStatus("loading");
     setDraftStatus("idle");
     setSaveStatus("idle");
@@ -133,7 +159,7 @@ export function TeacherFlow() {
       activityId: selectedActivity.id,
       activityCode: selectedActivity.code,
       activityTitle: selectedActivity.title,
-      reportText,
+      reportText: analysisInputText,
     };
 
     try {
@@ -239,6 +265,8 @@ export function TeacherFlow() {
           activity={selectedActivity}
           student={selectedStudent}
           reportText={reportText}
+          dnaAnswers={dnaAnswers}
+          analysisLength={analysisInputText.length}
           analysis={analysis}
           aiDraft={aiDraft}
           editorText={editorText}
@@ -252,14 +280,11 @@ export function TeacherFlow() {
           onBack={() => setStep("activities")}
           onReportChange={(value) => {
             setReportText(value);
-            setAnalysis(null);
-            setAiDraft("");
-            setEditorText("");
-            setFinalText(null);
-            setAnalysisStatus("idle");
-            setDraftStatus("idle");
-            setSaveStatus("idle");
-            setErrorMessage("");
+            invalidateAnalysis();
+          }}
+          onDnaAnswerChange={(index, value) => {
+            setDnaAnswers((current) => current.map((answer, itemIndex) => itemIndex === index ? value : answer));
+            invalidateAnalysis();
           }}
           onAnalyze={analyzeCurrentReport}
           onGenerate={generateDraft}
@@ -473,6 +498,8 @@ function Workspace({
   activity,
   student,
   reportText,
+  dnaAnswers,
+  analysisLength,
   analysis,
   aiDraft,
   editorText,
@@ -485,6 +512,7 @@ function Workspace({
   showOriginalDraft,
   onBack,
   onReportChange,
+  onDnaAnswerChange,
   onAnalyze,
   onGenerate,
   onEditorChange,
@@ -494,6 +522,8 @@ function Workspace({
   activity: Activity;
   student: Student;
   reportText: string;
+  dnaAnswers: readonly string[];
+  analysisLength: number;
   analysis: ReportAnalysis | null;
   aiDraft: string;
   editorText: string;
@@ -506,6 +536,7 @@ function Workspace({
   showOriginalDraft: boolean;
   onBack: () => void;
   onReportChange: (value: string) => void;
+  onDnaAnswerChange: (index: number, value: string) => void;
   onAnalyze: () => void;
   onGenerate: () => void;
   onEditorChange: (value: string) => void;
@@ -524,14 +555,20 @@ function Workspace({
       <div className="workspace-grid">
         <div className="workspace-column">
           <section className="panel input-panel">
-            <div className="panel-title"><div><span className="step-number">1</span><h2>학생 보고서 확인</h2></div><span className="subtle-label">직접 입력 또는 업로드</span></div>
-            <label className="field-label" htmlFor="report-text">보고서 내용</label>
-            <textarea id="report-text" className="report-textarea" value={reportText} onChange={(event) => onReportChange(event.target.value)} placeholder="학생이 작성한 보고서 내용을 입력하세요." />
-            <button className="drop-zone" type="button"><span>↑</span><strong>보고서 파일을 이곳에 끌어다 놓으세요</strong><small>PDF, DOCX, HWP · 프로토타입에서는 텍스트 입력을 사용합니다.</small></button>
-            <button className="button primary full" disabled={!reportText.trim() || busy} onClick={onAnalyze}>
-              {analysisStatus === "loading" ? "AI가 보고서를 분석하는 중..." : "✦ AI 분석 시작하기"}
+            <div className="panel-title"><div><span className="step-number">1</span><h2>학생 보고서 확인</h2></div><span className="subtle-label">{activity.title} 제출 형식</span></div>
+            <ReportInputForm
+              key={`${student.id}-${activity.id}`}
+              activityCode={activity.code}
+              reportText={reportText}
+              dnaAnswers={dnaAnswers}
+              onReportTextChange={onReportChange}
+              onDnaAnswerChange={onDnaAnswerChange}
+            />
+            <button className="button primary full" disabled={!analysisLength || analysisLength > MAX_REPORT_LENGTH || busy} onClick={onAnalyze}>
+              {analysisStatus === "loading" ? "AI가 본문을 분석하는 중..." : "✦ AI 분석 시작하기"}
             </button>
-            {!reportText.trim() && <p className="helper-text">보고서 내용이 있어야 AI 분석을 시작할 수 있습니다.</p>}
+            {!analysisLength && <p className="helper-text">{activity.code === "CAREER_DNA" ? "학생 본문이나 DNA 답변을 입력하면 AI 분석을 시작할 수 있습니다." : "학생 본문을 입력하면 AI 분석을 시작할 수 있습니다."}</p>}
+            {analysisLength > MAX_REPORT_LENGTH && <p className="report-file-error" role="alert">분석할 텍스트는 20,000자 이하로 입력해 주세요.</p>}
           </section>
 
           <section className="panel analysis-panel">
