@@ -107,4 +107,6 @@ export const mockGenerateActivityRecordRequest: GenerateActivityRecordRequest = 
 export const mockGenerateActivityRecordResponse: GenerateActivityRecordResponse = {
   draft: mockActivityRecords[0]?.aiDraft ?? "",
   usedEvidence: mockReportAnalysis.studentActions.map((item) => item.evidence),
+  characterCount: Array.from(mockActivityRecords[0]?.aiDraft ?? "").length,
+  maxLength: 250,
 };

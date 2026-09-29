@@ -1,0 +1,4 @@
+.nav { max-width: 1280px; margin: 0 auto 20px; display: flex; gap: 8px; }
+.nav a { padding: 9px 14px; border: 1px solid #dfe3ec; border-radius: 999px; color: #687286; background: rgba(255,255,255,.88); font-size: 12px; font-weight: 800; text-decoration: none; }
+.nav a:hover { color: #4b40b8; border-color: #c9c3f2; }
+.nav .active { color: white; border-color: #5548d2; background: #5548d2; }

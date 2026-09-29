@@ -12,7 +12,11 @@ export class AiRequestError extends Error {
 }
 
 export class AiProviderError extends Error {
-  constructor(message: string) {
+  constructor(
+    message: string,
+    public readonly code: AiApiErrorCode = "INVALID_AI_RESPONSE",
+    public readonly status: 429 | 502 | 503 | 504 = 502,
+  ) {
     super(message);
     this.name = "AiProviderError";
   }

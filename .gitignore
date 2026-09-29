@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .next/
+.ai-test-cache/
 *.tsbuildinfo
 .env
 .env.*

@@ -1,12 +1,12 @@
 import type { AnalyzeReportRequest, AnalyzeReportResponse } from "../../types";
 import { AiProviderError } from "../../lib/ai/errors";
-import { mockAIProvider } from "../../lib/ai/mock-provider";
-import type { AIProvider } from "../../lib/ai/provider";
+import type { ReportAnalysisProvider } from "../../lib/ai/provider";
+import { getReportAnalysisProvider } from "../../lib/ai/provider-factory";
 import { isReportAnalysis } from "../../lib/ai/validation";
 
 export async function analyzeReport(
   input: AnalyzeReportRequest,
-  provider: AIProvider = mockAIProvider,
+  provider: ReportAnalysisProvider = getReportAnalysisProvider(),
 ): Promise<AnalyzeReportResponse> {
   const analysis: unknown = await provider.analyzeReport(input);
   if (!isReportAnalysis(analysis)) {

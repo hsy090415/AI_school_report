@@ -1,11 +1,10 @@
 import type {
   AnalyzeReportRequest,
   AnalyzeReportResponse,
-  GenerateActivityRecordRequest,
-  GenerateActivityRecordResponse,
+  ActivityRecordDraftContent,
 } from "../../types";
 import { getAiActivityContext } from "./context";
-import type { AIProvider } from "./provider";
+import type { ActivityRecordDraftGenerationInput, AIProvider } from "./provider";
 
 const COMMON_ACTION_TERMS = ["했다", "하였다", "함", "수집", "발표", "기록", "검토"];
 
@@ -35,8 +34,8 @@ export class MockAIProvider implements AIProvider {
   }
 
   async generateActivityRecord(
-    input: GenerateActivityRecordRequest,
-  ): Promise<GenerateActivityRecordResponse> {
+    input: ActivityRecordDraftGenerationInput,
+  ): Promise<ActivityRecordDraftContent> {
     getAiActivityContext(input.activityCode);
     const usedEvidence = [
       ...new Set(input.analysis.studentActions.map((item) => item.evidence.trim())),

@@ -1,4 +1,15 @@
-import { ACTIVITY_CODES, type AnalyzeReportRequest, type GenerateActivityRecordRequest, type ReportAnalysis, type GenerateActivityRecordResponse } from "../../types";
+import {
+  ACTIVITY_CODES,
+  type AnalyzeReportFileRequestFields,
+  type AnalyzeReportRequest,
+  type GenerateActivityRecordRequest,
+  type ReportAnalysis,
+  type ActivityRecordDraftContent,
+  DEFAULT_ACTIVITY_RECORD_MAX_LENGTH,
+  MAX_ACTIVITY_RECORD_MAX_LENGTH,
+  MIN_ACTIVITY_RECORD_MAX_LENGTH,
+} from "../../types";
+import type { AnalyzeReportDocumentResult } from "./provider";
 import { getActivityDefinition } from "../activities";
 import { AiRequestError } from "./errors";
 
@@ -37,8 +48,38 @@ export function isReportAnalysis(value: unknown): value is ReportAnalysis {
   );
 }
 
-export function isActivityRecordDraft(value: unknown): value is GenerateActivityRecordResponse {
+export function isActivityRecordDraft(value: unknown): value is ActivityRecordDraftContent {
   return isObject(value) && isNonEmptyString(value.draft) && isStringList(value.usedEvidence);
+}
+
+export function isReportDocumentAnalysis(
+  value: unknown,
+): value is AnalyzeReportDocumentResult {
+  return (
+    isObject(value) &&
+    isNonEmptyString(value.extractedText) &&
+    isReportAnalysis(value.analysis)
+  );
+}
+
+export function parseAnalyzeReportFileRequestFields(
+  value: unknown,
+): AnalyzeReportFileRequestFields {
+  if (
+    !isObject(value) ||
+    !isNonEmptyString(value.studentId) ||
+    !isNonEmptyString(value.activityId) ||
+    !isActivityCode(value.activityCode) ||
+    !isNonEmptyString(value.activityTitle)
+  ) {
+    throw new AiRequestError("INVALID_REQUEST", "파일 분석 요청 정보가 올바르지 않습니다.");
+  }
+
+  if (value.activityTitle !== getActivityDefinition(value.activityCode).title) {
+    throw new AiRequestError("INVALID_REQUEST", "활동 코드와 활동 이름이 일치하지 않습니다.");
+  }
+
+  return value as unknown as AnalyzeReportFileRequestFields;
 }
 
 export function parseAnalyzeReportRequest(value: unknown): AnalyzeReportRequest {
@@ -75,5 +116,24 @@ export function parseGenerateActivityRecordRequest(value: unknown): GenerateActi
     throw new AiRequestError("INVALID_REQUEST", "필수 입력값 또는 분석 결과가 올바르지 않습니다.");
   }
 
-  return value as unknown as GenerateActivityRecordRequest;
+  const maxLength = value.maxLength ?? DEFAULT_ACTIVITY_RECORD_MAX_LENGTH;
+  if (
+    typeof maxLength !== "number" ||
+    !Number.isInteger(maxLength) ||
+    maxLength < MIN_ACTIVITY_RECORD_MAX_LENGTH ||
+    maxLength > MAX_ACTIVITY_RECORD_MAX_LENGTH
+  ) {
+    throw new AiRequestError(
+      "INVALID_REQUEST",
+      `초안 글자 수는 ${MIN_ACTIVITY_RECORD_MAX_LENGTH}자부터 ${MAX_ACTIVITY_RECORD_MAX_LENGTH}자까지 설정할 수 있습니다.`,
+    );
+  }
+
+  return {
+    studentId: value.studentId,
+    activityId: value.activityId,
+    activityCode: value.activityCode,
+    analysis: value.analysis,
+    maxLength,
+  };
 }
