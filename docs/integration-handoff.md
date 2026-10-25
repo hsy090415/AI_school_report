@@ -12,7 +12,7 @@
 - `POST /api/teacher/workspace`: `{ studentId, activityId, activityCode, reportText, analysis, aiDraft }` 저장. AI 원본 기록이 이미 있으면 409를 반환한다. 보고서만 저장된 경우에는 내용이 정확히 같을 때 초안 저장을 재시도한다.
 - `PATCH /api/teacher/workspace`: `{ studentId, activityId, finalText }`로 교사 수정 문구 저장. `aiDraft`는 변경하지 않음
 
-모든 DB API는 서버에서 Supabase Auth 사용자를 검증한다. `service_role` 키는 사용하지 않는다. `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` 설정이 필요하다. Supabase 프로젝트의 **Allow anonymous sign-ins**도 활성화해야 한다.
+모든 DB API는 서버에서 Supabase Auth 사용자를 검증한다. `service_role` 키는 사용하지 않는다. `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` 설정이 필요하다. 로그인은 이메일/비밀번호 세션을 사용하며, DB 권한은 관리자가 연결한 `teachers.auth_user_id` 또는 `students.auth_user_id`와 `auth.uid()`가 일치할 때만 부여된다. 익명 Auth 사용자는 RLS에서 차단한다.
 
 DNA 분석 응답에는 `analysis`와 `extractedText`가 있고, DNA 초안 응답에는 `draft`가 있다. I CAN WE CAN·1인 1주제·교과창체 초안 응답에는 저장에 바로 쓸 수 있는 `analysis`와 `reportText`를 추가했다.
 

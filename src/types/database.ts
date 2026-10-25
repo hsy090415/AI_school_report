@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.17"
   }
   public: {
     Tables: {
@@ -113,6 +113,292 @@ export type Database = {
           },
         ]
       }
+      icwc_draft_history: {
+        Row: {
+          created_at: string
+          draft_text: string
+          generation_direction: string
+          id: string
+          review_id: string
+          teacher_id: string
+        }
+        Insert: {
+          created_at?: string
+          draft_text: string
+          generation_direction: string
+          id?: string
+          review_id: string
+          teacher_id: string
+        }
+        Update: {
+          created_at?: string
+          draft_text?: string
+          generation_direction?: string
+          id?: string
+          review_id?: string
+          teacher_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "icwc_draft_history_review_teacher_fkey"
+            columns: ["review_id", "teacher_id"]
+            isOneToOne: false
+            referencedRelation: "icwc_student_reviews"
+            referencedColumns: ["id", "teacher_id"]
+          },
+        ]
+      }
+      icwc_final_records: {
+        Row: {
+          activity_id: string
+          created_at: string
+          final_text: string
+          id: string
+          published_at: string | null
+          review_id: string
+          student_id: string
+          teacher_id: string
+          updated_at: string
+        }
+        Insert: {
+          activity_id: string
+          created_at?: string
+          final_text: string
+          id?: string
+          published_at?: string | null
+          review_id: string
+          student_id: string
+          teacher_id: string
+          updated_at?: string
+        }
+        Update: {
+          activity_id?: string
+          created_at?: string
+          final_text?: string
+          id?: string
+          published_at?: string | null
+          review_id?: string
+          student_id?: string
+          teacher_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "icwc_final_records_review_fkey"
+            columns: ["review_id", "teacher_id", "student_id", "activity_id"]
+            isOneToOne: false
+            referencedRelation: "icwc_student_reviews"
+            referencedColumns: ["id", "teacher_id", "student_id", "activity_id"]
+          },
+        ]
+      }
+      icwc_student_reviews: {
+        Row: {
+          activity_id: string
+          created_at: string
+          draft_focus: string | null
+          id: string
+          student_id: string
+          submission_id: string
+          teacher_comment: string
+          teacher_id: string
+          team_id: string
+          updated_at: string
+        }
+        Insert: {
+          activity_id: string
+          created_at?: string
+          draft_focus?: string | null
+          id?: string
+          student_id: string
+          submission_id: string
+          teacher_comment?: string
+          teacher_id: string
+          team_id: string
+          updated_at?: string
+        }
+        Update: {
+          activity_id?: string
+          created_at?: string
+          draft_focus?: string | null
+          id?: string
+          student_id?: string
+          submission_id?: string
+          teacher_comment?: string
+          teacher_id?: string
+          team_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "icwc_student_reviews_submission_fkey"
+            columns: [
+              "submission_id",
+              "teacher_id",
+              "student_id",
+              "team_id",
+              "activity_id",
+            ]
+            isOneToOne: false
+            referencedRelation: "icwc_student_submissions"
+            referencedColumns: [
+              "id",
+              "teacher_id",
+              "student_id",
+              "team_id",
+              "activity_id",
+            ]
+          },
+        ]
+      }
+      icwc_student_submissions: {
+        Row: {
+          activity_id: string
+          created_at: string
+          id: string
+          reflection_text: string
+          student_id: string
+          submitted_at: string | null
+          teacher_id: string
+          team_id: string
+          updated_at: string
+        }
+        Insert: {
+          activity_id: string
+          created_at?: string
+          id?: string
+          reflection_text?: string
+          student_id: string
+          submitted_at?: string | null
+          teacher_id: string
+          team_id: string
+          updated_at?: string
+        }
+        Update: {
+          activity_id?: string
+          created_at?: string
+          id?: string
+          reflection_text?: string
+          student_id?: string
+          submitted_at?: string | null
+          teacher_id?: string
+          team_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "icwc_student_submissions_member_fkey"
+            columns: ["team_id", "student_id", "teacher_id", "activity_id"]
+            isOneToOne: false
+            referencedRelation: "icwc_team_members"
+            referencedColumns: [
+              "team_id",
+              "student_id",
+              "teacher_id",
+              "activity_id",
+            ]
+          },
+        ]
+      }
+      icwc_team_members: {
+        Row: {
+          activity_id: string
+          created_at: string
+          student_id: string
+          teacher_id: string
+          team_id: string
+        }
+        Insert: {
+          activity_id: string
+          created_at?: string
+          student_id: string
+          teacher_id: string
+          team_id: string
+        }
+        Update: {
+          activity_id?: string
+          created_at?: string
+          student_id?: string
+          teacher_id?: string
+          team_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "icwc_team_members_student_teacher_fkey"
+            columns: ["student_id", "teacher_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id", "teacher_id"]
+          },
+          {
+            foreignKeyName: "icwc_team_members_team_fkey"
+            columns: ["team_id", "teacher_id", "activity_id"]
+            isOneToOne: false
+            referencedRelation: "icwc_teams"
+            referencedColumns: ["id", "teacher_id", "activity_id"]
+          },
+        ]
+      }
+      icwc_teams: {
+        Row: {
+          activity_id: string
+          created_at: string
+          id: string
+          report_file_mime_type: string | null
+          report_file_name: string | null
+          report_file_path: string | null
+          report_file_size_bytes: number | null
+          report_text: string
+          submitted_at: string | null
+          teacher_id: string
+          team_name: string
+          updated_at: string
+        }
+        Insert: {
+          activity_id: string
+          created_at?: string
+          id?: string
+          report_file_mime_type?: string | null
+          report_file_name?: string | null
+          report_file_path?: string | null
+          report_file_size_bytes?: number | null
+          report_text?: string
+          submitted_at?: string | null
+          teacher_id: string
+          team_name: string
+          updated_at?: string
+        }
+        Update: {
+          activity_id?: string
+          created_at?: string
+          id?: string
+          report_file_mime_type?: string | null
+          report_file_name?: string | null
+          report_file_path?: string | null
+          report_file_size_bytes?: number | null
+          report_text?: string
+          submitted_at?: string | null
+          teacher_id?: string
+          team_name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "icwc_teams_activity_teacher_fkey"
+            columns: ["activity_id", "teacher_id"]
+            isOneToOne: false
+            referencedRelation: "activities"
+            referencedColumns: ["id", "teacher_id"]
+          },
+          {
+            foreignKeyName: "icwc_teams_teacher_id_fkey"
+            columns: ["teacher_id"]
+            isOneToOne: false
+            referencedRelation: "teachers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       student_reports: {
         Row: {
           activity_id: string
@@ -179,6 +465,7 @@ export type Database = {
       }
       students: {
         Row: {
+          auth_user_id: string | null
           class_no: number
           created_at: string
           grade: number
@@ -189,6 +476,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          auth_user_id?: string | null
           class_no: number
           created_at?: string
           grade: number
@@ -199,6 +487,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          auth_user_id?: string | null
           class_no?: number
           created_at?: string
           grade?: number
@@ -220,6 +509,7 @@ export type Database = {
       }
       teachers: {
         Row: {
+          auth_user_id: string | null
           created_at: string
           email: string
           id: string
@@ -228,14 +518,16 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          auth_user_id?: string | null
           created_at?: string
           email: string
-          id: string
+          id?: string
           name: string
           role?: string
           updated_at?: string
         }
         Update: {
+          auth_user_id?: string | null
           created_at?: string
           email?: string
           id?: string

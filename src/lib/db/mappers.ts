@@ -7,6 +7,15 @@ import {
   type ActivityRecord,
   type EvidenceAction,
   type EvidenceSkill,
+  ICWC_DRAFT_DIRECTIONS,
+  type IcwcDraftDirection,
+  type IcwcDraftHistoryEntry,
+  type IcwcFinalRecord,
+  type IcwcStudentReview,
+  type IcwcStudentSubmission,
+  type IcwcTeam,
+  type IcwcTeamMember,
+  type LinkedStudentAccount,
   type ReportAnalysis,
   type Student,
   type StudentReport,
@@ -75,6 +84,13 @@ function toActivityCategory(value: string): ActivityCategory {
   return value as ActivityCategory;
 }
 
+function toIcwcDraftDirection(value: string): IcwcDraftDirection {
+  if (!ICWC_DRAFT_DIRECTIONS.some((direction) => direction === value)) {
+    throw new Error(`지원하지 않는 ICWC 초안 방향입니다: ${value}`);
+  }
+  return value as IcwcDraftDirection;
+}
+
 export function toTeacher(row: Tables<"teachers">): Teacher {
   return {
     id: row.id,
@@ -127,6 +143,123 @@ export function toActivityRecord(row: Tables<"activity_records">): ActivityRecor
     analysis: parseReportAnalysis(row.analysis_json),
     aiDraft: row.ai_draft,
     finalText: row.final_text,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function toLinkedStudentAccount(
+  row: Tables<"students">,
+): LinkedStudentAccount {
+  if (!row.auth_user_id) {
+    throw new Error("학생 명단에 Auth 계정이 연결되어 있지 않습니다.");
+  }
+
+  return {
+    id: row.id,
+    teacherId: row.teacher_id,
+    authUserId: row.auth_user_id,
+    name: row.name,
+    grade: row.grade,
+    classNo: row.class_no,
+    studentNo: row.student_no,
+  };
+}
+
+export function toIcwcTeam(row: Tables<"icwc_teams">): IcwcTeam {
+  const reportFile = row.report_file_path
+    ? {
+        path: row.report_file_path,
+        name: row.report_file_name ?? "",
+        mimeType: row.report_file_mime_type ?? "",
+        sizeBytes: row.report_file_size_bytes ?? 0,
+      }
+    : null;
+
+  return {
+    id: row.id,
+    teacherId: row.teacher_id,
+    activityId: row.activity_id,
+    teamName: row.team_name,
+    reportText: row.report_text,
+    reportFile,
+    submittedAt: row.submitted_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function toIcwcTeamMember(
+  row: Tables<"icwc_team_members">,
+): IcwcTeamMember {
+  return {
+    teamId: row.team_id,
+    teacherId: row.teacher_id,
+    activityId: row.activity_id,
+    studentId: row.student_id,
+    createdAt: row.created_at,
+  };
+}
+
+export function toIcwcStudentSubmission(
+  row: Tables<"icwc_student_submissions">,
+): IcwcStudentSubmission {
+  return {
+    id: row.id,
+    teamId: row.team_id,
+    teacherId: row.teacher_id,
+    activityId: row.activity_id,
+    studentId: row.student_id,
+    reflectionText: row.reflection_text,
+    submittedAt: row.submitted_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function toIcwcStudentReview(
+  row: Tables<"icwc_student_reviews">,
+): IcwcStudentReview {
+  return {
+    id: row.id,
+    submissionId: row.submission_id,
+    teamId: row.team_id,
+    teacherId: row.teacher_id,
+    activityId: row.activity_id,
+    studentId: row.student_id,
+    teacherComment: row.teacher_comment,
+    draftFocus: row.draft_focus
+      ? toIcwcDraftDirection(row.draft_focus)
+      : null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function toIcwcDraftHistoryEntry(
+  row: Tables<"icwc_draft_history">,
+): IcwcDraftHistoryEntry {
+  return {
+    id: row.id,
+    reviewId: row.review_id,
+    teacherId: row.teacher_id,
+    generationDirection: toIcwcDraftDirection(row.generation_direction),
+    draftText: row.draft_text,
+    createdAt: row.created_at,
+  };
+}
+
+export function toIcwcFinalRecord(
+  row: Tables<"icwc_final_records">,
+): IcwcFinalRecord {
+  return {
+    id: row.id,
+    reviewId: row.review_id,
+    teacherId: row.teacher_id,
+    studentId: row.student_id,
+    activityId: row.activity_id,
+    finalText: row.final_text,
+    publishedAt: row.published_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

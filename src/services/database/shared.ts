@@ -16,7 +16,7 @@ export function throwIfSupabaseError(
   }
 }
 
-export async function requireAuthenticatedTeacherId(
+export async function requireAuthenticatedUserId(
   client: AppSupabaseClient,
 ): Promise<string> {
   const { data, error } = await client.auth.getUser();
@@ -30,4 +30,25 @@ export async function requireAuthenticatedTeacherId(
   }
 
   return data.user.id;
+}
+
+export async function requireAuthenticatedTeacherId(
+  client: AppSupabaseClient,
+): Promise<string> {
+  const userId = await requireAuthenticatedUserId(client);
+  const { data, error } = await client
+    .from("teachers")
+    .select("id")
+    .eq("auth_user_id", userId)
+    .maybeSingle();
+  throwIfSupabaseError("승인된 교사 계정 확인 실패", error);
+
+  if (!data) {
+    throw new DatabaseOperationError(
+      "승인된 교사 계정 확인 실패",
+      "관리자가 연결한 교사 계정이 필요합니다.",
+    );
+  }
+
+  return data.id;
 }
