@@ -111,6 +111,7 @@ function ExtractedReportViewer({ reportText }: { reportText: string }) {
 
 export function IcwcConnectedWorkspace() {
   const [client, setClient] = useState<AppSupabaseClient | null>(null);
+  const [authReady, setAuthReady] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [role, setRole] = useState<Role>(null);
   const [profileName, setProfileName] = useState("");
@@ -183,13 +184,36 @@ export function IcwcConnectedWorkspace() {
     try {
       const supabase = createClient();
       setClient(supabase);
-      void supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
+      let active = true;
+      let anonymousSignOutTimer: number | null = null;
       const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+        if (session?.user.is_anonymous) {
+          setUserId(null);
+          setAuthReady(false);
+          if (anonymousSignOutTimer === null) {
+            // Supabase auth calls must run after the synchronous auth callback returns.
+            anonymousSignOutTimer = window.setTimeout(() => {
+              anonymousSignOutTimer = null;
+              void supabase.auth.signOut({ scope: "local" }).then(({ error: signOutError }) => {
+                if (!active || !signOutError) return;
+                setError(errorText(signOutError));
+                setAuthReady(true);
+              });
+            }, 0);
+          }
+          return;
+        }
         setUserId(session?.user.id ?? null);
+        setAuthReady(true);
       });
-      return () => listener.subscription.unsubscribe();
+      return () => {
+        active = false;
+        if (anonymousSignOutTimer !== null) window.clearTimeout(anonymousSignOutTimer);
+        listener.subscription.unsubscribe();
+      };
     } catch (caught) {
       setError(errorText(caught));
+      setAuthReady(true);
     }
   }, []);
 
@@ -475,6 +499,13 @@ export function IcwcConnectedWorkspace() {
       setFinalRecord(result);
       setMessage(publish ? "최종 문장을 저장하고 학생에게 공개했습니다." : "최종 문장을 저장했습니다.");
     });
+  }
+
+  if (!authReady) {
+    return <main className={styles.authPage}>
+      <div className={styles.authBrand}><span>R</span><strong>Recordly</strong></div>
+      <section className={styles.authCard}><p className={styles.subtle}>로그인 상태를 확인하고 있습니다…</p></section>
+    </main>;
   }
 
   if (!userId) {
