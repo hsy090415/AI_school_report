@@ -66,6 +66,21 @@ export interface IcwcDraftHistoryEntry {
   createdAt: string;
 }
 
+export interface IcwcDraftReview {
+  draft: string;
+  characterCount: number;
+  byteCount: number;
+  maxLength: number;
+  englishTerms: string[];
+  specialCharacters: string[];
+  nonNominalSentences: number[];
+  warnings: string[];
+}
+
+export interface IcwcDraftGenerationResponse extends IcwcDraftReview {
+  history: IcwcDraftHistoryEntry;
+}
+
 export interface IcwcFinalRecord {
   id: string;
   reviewId: string;

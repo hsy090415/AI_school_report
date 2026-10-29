@@ -20,6 +20,7 @@ import {
 } from "../../services/database";
 import type {
   IcwcDraftDirection,
+  IcwcDraftGenerationResponse,
   IcwcFinalRecord,
   IcwcStudentReview,
   IcwcStudentSubmission,
@@ -27,6 +28,7 @@ import type {
   IcwcTeamMember,
   Student,
 } from "../../types";
+import { DEFAULT_ACTIVITY_RECORD_MAX_LENGTH } from "../../types";
 import styles from "./icwc-connected.module.css";
 
 type Role = "TEACHER" | "STUDENT" | "PENDING" | null;
@@ -144,6 +146,7 @@ export function IcwcConnectedWorkspace() {
   const [focus, setFocus] = useState<IcwcDraftDirection>("탐구내용 중심");
   const [finalRecord, setFinalRecord] = useState<IcwcFinalRecord | null>(null);
   const [finalText, setFinalText] = useState("");
+  const [draftResult, setDraftResult] = useState<IcwcDraftGenerationResponse | null>(null);
   const [reportInspection, setReportInspection] = useState<ReportInspection | null>(null);
 
   const [busy, setBusy] = useState("");
@@ -323,6 +326,7 @@ export function IcwcConnectedWorkspace() {
   useEffect(() => {
     if (!client || role !== "TEACHER" || !selectedSubmission) {
       setReview(null);
+      setDraftResult(null);
       setTeacherComment("");
       setFocus("탐구내용 중심");
       setFinalRecord(null);
@@ -330,6 +334,7 @@ export function IcwcConnectedWorkspace() {
       return;
     }
     let active = true;
+    setDraftResult(null);
     void (async () => {
       try {
         const saved = await getIcwcStudentReview(client, selectedSubmission.id);
@@ -338,13 +343,15 @@ export function IcwcConnectedWorkspace() {
         setTeacherComment(saved?.teacherComment ?? "");
         setFocus(saved?.draftFocus ?? "탐구내용 중심");
         if (!saved) return;
-        const { data, error: finalError } = await client
-          .from("icwc_final_records")
-          .select("*")
-          .eq("review_id", saved.id)
-          .maybeSingle();
+        const [{ data, error: finalError }, draftResponse] = await Promise.all([
+          client.from("icwc_final_records").select("*").eq("review_id", saved.id).maybeSingle(),
+          fetch(`/api/icwc-test/draft?reviewId=${encodeURIComponent(saved.id)}`, { cache: "no-store" }),
+        ]);
         if (finalError) throw finalError;
+        if (!draftResponse.ok) throw new Error(await apiError(draftResponse));
+        const savedDraft = (await draftResponse.json()) as { latest: IcwcDraftGenerationResponse | null };
         if (!active) return;
+        setDraftResult(savedDraft.latest);
         const record: IcwcFinalRecord | null = data ? {
           id: data.id,
           reviewId: data.review_id,
@@ -488,9 +495,41 @@ export function IcwcConnectedWorkspace() {
     });
   }
 
+  async function generateDraft(): Promise<void> {
+    if (!client || !selectedSubmission || !selectedTeam?.submittedAt || !selectedSubmission.submittedAt) {
+      setError("팀 보고서와 학생 소감문이 모두 제출되어야 초안을 생성할 수 있습니다.");
+      return;
+    }
+    if (!teacherComment.trim()) {
+      setError("교사 코멘트를 입력해 주세요.");
+      return;
+    }
+    await run("generate", async () => {
+      const saved = await saveIcwcStudentReview(client, {
+        submissionId: selectedSubmission.id,
+        teacherComment: teacherComment.trim(),
+        draftFocus: focus,
+      });
+      setReview(saved);
+      const response = await fetch("/api/icwc-test/draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ submissionId: selectedSubmission.id, maxLength: DEFAULT_ACTIVITY_RECORD_MAX_LENGTH }),
+      });
+      if (!response.ok) throw new Error(await apiError(response));
+      const generated = (await response.json()) as IcwcDraftGenerationResponse;
+      setDraftResult(generated);
+      setMessage("검토용 초안을 저장했습니다. 검수 항목을 확인하고 최종 문장을 직접 수정해 주세요.");
+    });
+  }
+
   async function saveFinal(publish: boolean): Promise<void> {
     if (!client || !review || !finalText.trim()) {
       setError("검토를 저장하고 최종 문장을 입력해 주세요.");
+      return;
+    }
+    if (draftResult && finalText.trim() === draftResult.draft.trim()) {
+      setError("AI 초안을 그대로 저장할 수 없습니다. 근거와 표현을 확인하고 직접 수정해 주세요.");
       return;
     }
     await run("final", async () => {
@@ -606,6 +645,8 @@ export function IcwcConnectedWorkspace() {
       setFocus={setFocus}
       review={review}
       saveReview={() => void saveReview()}
+      generateDraft={() => void generateDraft()}
+      draftResult={draftResult}
       finalText={finalText}
       setFinalText={setFinalText}
       finalRecord={finalRecord}
@@ -655,6 +696,8 @@ interface TeacherWorkspaceProps {
   setFocus: (value: IcwcDraftDirection) => void;
   review: IcwcStudentReview | null;
   saveReview: () => void;
+  generateDraft: () => void;
+  draftResult: IcwcDraftGenerationResponse | null;
   finalText: string;
   setFinalText: (value: string) => void;
   finalRecord: IcwcFinalRecord | null;
@@ -701,11 +744,22 @@ function TeacherWorkspace(props: TeacherWorkspaceProps) {
       <span className={styles.fieldTitle}>초안 방향</span>
       <div className={styles.focusOptions}><button className={props.focus === "탐구내용 중심" ? styles.focusActive : ""} onClick={() => props.setFocus("탐구내용 중심")}>탐구내용 중심</button><button className={props.focus === "공동체역량 중심" ? styles.focusActive : ""} onClick={() => props.setFocus("공동체역량 중심")}>공동체역량 중심</button></div>
       <button className={styles.secondaryWide} disabled={!props.selectedSubmission || props.busy === "review"} onClick={props.saveReview}>{props.busy === "review" ? "저장 중…" : "코멘트·방향 저장"}</button>
-      <button className={styles.aiDisabled} disabled>AI 초안 생성 · 다음 단계에서 연결</button>
+      <button className={styles.primaryWide} disabled={!props.selectedSubmission || props.busy === "generate" || props.busy === "review"} onClick={props.generateDraft}>{props.busy === "generate" ? "Groq 초안 생성 중…" : "AI 초안 생성 · 250자 목표"}</button>
+      {props.draftResult ? <section className={styles.draftReview} aria-label="AI 초안과 서버 검수 결과">
+        <div className={styles.draftHeader}><h3>AI 검토용 초안</h3><small>{props.draftResult.characterCount}자 · {props.draftResult.byteCount}바이트 · 목표 {props.draftResult.maxLength}자</small></div>
+        <p className={styles.draftText}>{props.draftResult.draft}</p>
+        <div className={styles.draftChecks}>
+          <strong>서버 검수</strong>
+          <span>영문 {props.draftResult.englishTerms.length ? `${props.draftResult.englishTerms.length}건 확인 필요` : "없음"} · 특수문자 {props.draftResult.specialCharacters.length ? `${props.draftResult.specialCharacters.length}건 확인 필요` : "없음"} · 명사형 종결 {props.draftResult.nonNominalSentences.length ? `${props.draftResult.nonNominalSentences.length}문장 확인 필요` : "확인됨"}</span>
+          {props.draftResult.warnings.length ? <ul>{props.draftResult.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul> : <p>자동 검수에서 발견된 표기·종결 경고가 없습니다.</p>}
+        </div>
+        <button className={styles.secondaryWide} onClick={() => props.setFinalText(props.draftResult?.draft ?? "")}>초안을 편집기로 가져오기</button>
+      </section> : null}
       <div className={styles.finalEditor}>
         <div><h3>교사 최종 기록</h3><small>{Array.from(props.finalText).length}자 · {props.finalRecord?.publishedAt ? "학생 공개 중" : "비공개"}</small></div>
-        <textarea rows={8} value={props.finalText} onChange={(event) => props.setFinalText(event.target.value)} placeholder="AI 연결 전에는 교사가 직접 입력해 흐름을 테스트할 수 있습니다." />
-        <div className={styles.actionRow}><button className={styles.secondary} disabled={!props.review || !props.finalText.trim()} onClick={() => props.saveFinal(false)}>저장</button><button className={styles.primary} disabled={!props.review || !props.finalText.trim()} onClick={() => props.saveFinal(true)}>저장·학생 공개</button></div>
+        <textarea rows={8} value={props.finalText} onChange={(event) => props.setFinalText(event.target.value)} placeholder="초안을 근거와 대조하고 교사가 직접 수정해 주세요." />
+        <p className={styles.finalHint}>AI 문장을 그대로 입력하지 말고 학생의 실제 활동과 교사 관찰을 확인해 수정해 주세요.</p>
+        <div className={styles.actionRow}><button className={styles.secondary} disabled={!props.review || !props.finalText.trim() || props.busy === "final"} onClick={() => props.saveFinal(false)}>저장</button><button className={styles.primary} disabled={!props.review || !props.finalText.trim() || props.busy === "final"} onClick={() => props.saveFinal(true)}>저장·학생 공개</button></div>
       </div>
     </aside>
   </div>;

@@ -1,8 +1,9 @@
 import "server-only";
 
-import type { IcwcDraftDirection } from "../../types";
+import type { IcwcDraftDirection, IcwcDraftReview } from "../../types";
 import { getGroqAIConfig } from "../../lib/ai/config";
 import { AiProviderError } from "../../lib/ai/errors";
+import { inspectIcwcDraft } from "./icwc-draft-validation";
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 const MAX_SOURCE_LENGTH = 20_000;
@@ -13,13 +14,6 @@ export interface IcwcSecondYearDraftInput {
   teacherComment: string;
   direction: IcwcDraftDirection;
   maxLength: number;
-}
-
-export interface IcwcSecondYearDraftResult {
-  draft: string;
-  characterCount: number;
-  maxLength: number;
-  warnings: string[];
 }
 
 function removeContactDetails(value: string): string {
@@ -34,21 +28,19 @@ function conciseReport(text: string): string {
 }
 
 function prompt(input: IcwcSecondYearDraftInput): string {
-  const requestedLength = Math.max(80, input.maxLength - 70);
   const focus = input.direction === "탐구내용 중심"
-    ? "연구 주제와 목적 → 학생이 이해·수행한 연구 설계와 결과 분석 → 확인되는 탐구 역량을 중심으로 쓴다. 팀 전체의 결과를 개인의 단독 성과로 돌리지 않는다."
-    : "연구 주제를 짧게 제시한 뒤 학생의 실제 역할·협업·의견 조율·문제 해결을 중심으로 쓴다. 개인 소감문 또는 교사 코멘트에 협업 근거가 없다면 협력 역량을 지어내지 않는다.";
+    ? "탐구내용 중심: 팀 보고서에서 탐구 주제, 연구 방법, 분석한 자료와 결과를 구체적으로 파악한다. 그중 학생 개인 소감문과 교사 코멘트로 확인되는 이해·분석·탐구 과정을 연결해 탐구역량을 드러낸다. 팀 공동 결과를 학생의 단독 성과로 쓰지 않는다."
+    : "공동체역량 중심: 개인 소감문과 교사 코멘트를 우선 근거로 삼아 학생의 역할 분담, 맡은 역할 수행, 자료 공유, 동료와의 소통·배려, 협력적 문제 해결 과정을 구체적으로 쓴다. 보고서의 탐구 주제는 맥락으로만 간결하게 제시한다. 각 역량은 실제 행동 근거가 있을 때만 언급한다.";
 
   return [
     "2학년 협동심화탐구프로젝트 학교생활기록부 검토용 초안을 작성한다.",
     "팀 보고서, 학생 개인 소감문, 교사 관찰 코멘트에 명시된 사실만 사용한다.",
     "보고서의 팀 성과와 해당 학생의 행동을 구분하고, 확인되지 않은 개인 기여·실험 결과·역량을 만들지 않는다.",
     `선택한 방향: ${input.direction}. ${focus}`,
-    "첫 문장은 활동 참여와 실제 탐구 주제를, 이어지는 문장은 구체적인 탐구 과정·판단과 근거 있는 역량을 자연스럽게 연결한다.",
-    "학생의 어려움과 해결 과정이 있으면 관찰 가능한 행동으로 표현하고, 근거 없는 칭찬이나 추상적 수식어를 피한다.",
-    "모든 문장은 '~함.', '~분석함.', '~드러냄.'처럼 -(으)ㅁ 명사형으로 끝낸다. 3~4문장, 줄바꿈 없는 한 문단으로 작성한다.",
-    `공백 포함 약 ${requestedLength}자를 목표로 한 번만 생성한다. 실제 기준은 ${input.maxLength}자이며, 길이는 교사가 수정할 수 있다.`,
-    'JSON 객체 하나만 반환한다. 형식: {"draft":"완성된 한 문단"}',
+    "문장 수와 문장 순서를 고정하지 않는다. 학생의 실제 행동과 그 행동에서 확인되는 역량을 자연스럽게 연결하고, 근거 없는 칭찬이나 추상적인 수식어를 피한다.",
+    "교사가 검토할 초안으로 작성한다. 모든 문장은 '-(으)ㅁ' 명사형으로 끝낸다. 한국어를 기본으로 하고 필요한 고유명사·통용 약어 외 영문, 이모지, 장식용 특수문자, 문단 번호를 피한다.",
+    `공백 포함 약 ${input.maxLength}자를 목표로 한 번만 작성한다. 글자 수가 정확하지 않아도 문장을 억지로 끊지 않는다.`,
+    'JSON 객체 하나만 반환한다. 형식: {"draft":"검토용 초안"}',
     "\n<team_report>\n" + removeContactDetails(conciseReport(input.reportText)) + "\n</team_report>",
     "<student_reflection>\n" + removeContactDetails(input.reflectionText) + "\n</student_reflection>",
     "<teacher_comment>\n" + removeContactDetails(input.teacherComment) + "\n</teacher_comment>",
@@ -57,7 +49,7 @@ function prompt(input: IcwcSecondYearDraftInput): string {
 
 export async function generateIcwcSecondYearDraft(
   input: IcwcSecondYearDraftInput,
-): Promise<IcwcSecondYearDraftResult> {
+): Promise<IcwcDraftReview> {
   const config = getGroqAIConfig();
   let response: Response;
   try {
@@ -114,10 +106,6 @@ export async function generateIcwcSecondYearDraft(
     throw new AiProviderError("Groq 응답에 초안 문장이 없습니다. 자동 재요청은 하지 않았습니다.");
   }
 
-  const normalized = draft.replace(/\s+/gu, " ").trim();
-  const characterCount = Array.from(normalized).length;
-  const warnings: string[] = [];
-  if (characterCount > input.maxLength) warnings.push(`설정한 ${input.maxLength}자를 초과했습니다. 교사가 수정해 주세요.`);
-  if (!/(?:함|됨|음|봄|냄|임)\.$/u.test(normalized)) warnings.push("마지막 문장의 -(으)ㅁ 종결어미를 확인해 주세요.");
-  return { draft: normalized, characterCount, maxLength: input.maxLength, warnings };
+  const normalized = draft.replace(/[ \t]+/gu, " ").replace(/\n{3,}/gu, "\n\n").trim();
+  return inspectIcwcDraft(normalized, input.maxLength);
 }

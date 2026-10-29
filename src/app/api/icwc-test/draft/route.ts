@@ -1,4 +1,5 @@
 import {
+  DEFAULT_ACTIVITY_RECORD_MAX_LENGTH,
   ICWC_DRAFT_DIRECTIONS,
   MAX_ACTIVITY_RECORD_MAX_LENGTH,
   MIN_ACTIVITY_RECORD_MAX_LENGTH,
@@ -8,13 +9,38 @@ import { aiErrorResponse, readJson } from "../../../../lib/ai/http";
 import { AIConfigurationError } from "../../../../lib/ai/config";
 import { createClient } from "../../../../lib/supabase/server";
 import { generateIcwcSecondYearDraft } from "../../../../services/ai/icwc-second-year-draft-writer";
-import { addIcwcDraftHistoryEntry, requireAuthenticatedTeacherId } from "../../../../services/database";
+import { inspectIcwcDraft } from "../../../../services/ai/icwc-draft-validation";
+import { addIcwcDraftHistoryEntry, getIcwcDraftHistory, requireAuthenticatedTeacherId } from "../../../../services/database";
+
+export async function GET(request: Request): Promise<Response> {
+  try {
+    const reviewId = new URL(request.url).searchParams.get("reviewId") ?? "";
+    if (!/^[a-f\d-]{36}$/iu.test(reviewId)) {
+      throw new AiRequestError("INVALID_REQUEST", "검토 ID가 올바르지 않습니다.");
+    }
+    const client = await createClient();
+    const teacherId = await requireAuthenticatedTeacherId(client);
+    const { data: review, error } = await client.from("icwc_student_reviews")
+      .select("id,teacher_id").eq("id", reviewId).maybeSingle();
+    if (error || !review || review.teacher_id !== teacherId) {
+      return Response.json({ error: { message: "담당 학생의 검토를 찾을 수 없습니다." } }, { status: 404 });
+    }
+    const [latest] = await getIcwcDraftHistory(client, reviewId);
+    return Response.json({ latest: latest ? {
+      ...inspectIcwcDraft(latest.draftText, DEFAULT_ACTIVITY_RECORD_MAX_LENGTH),
+      history: latest,
+    } : null });
+  } catch (error) {
+    if (error instanceof AiRequestError || error instanceof AiProviderError || error instanceof AIConfigurationError) return aiErrorResponse(error);
+    return Response.json({ error: { message: "저장된 초안 조회에 실패했습니다." } }, { status: 500 });
+  }
+}
 
 export async function POST(request: Request): Promise<Response> {
   try {
     const body = (await readJson(request)) as { submissionId?: unknown; maxLength?: unknown };
     const submissionId = typeof body.submissionId === "string" ? body.submissionId.trim() : "";
-    const maxLength = body.maxLength;
+    const maxLength = body.maxLength ?? DEFAULT_ACTIVITY_RECORD_MAX_LENGTH;
     if (!/^[a-f\d-]{36}$/iu.test(submissionId)) {
       throw new AiRequestError("INVALID_REQUEST", "제출물 ID가 올바르지 않습니다.");
     }
