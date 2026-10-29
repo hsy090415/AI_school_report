@@ -90,7 +90,15 @@ function getBodySize(
   return body instanceof Blob ? body.size : body.byteLength;
 }
 
-function getReportExtension(mimeType: string): ".docx" | ".hwp" | ".hwpx" {
+function getReportExtension(
+  mimeType: string,
+  originalName: string,
+): ".docx" | ".hwp" | ".hwpx" {
+  const normalizedName = originalName.trim().toLowerCase();
+  if (normalizedName.endsWith(".docx")) return ".docx";
+  if (normalizedName.endsWith(".hwpx")) return ".hwpx";
+  if (normalizedName.endsWith(".hwp")) return ".hwp";
+
   if (
     mimeType ===
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -108,6 +116,14 @@ function getReportExtension(mimeType: string): ".docx" | ".hwp" | ".hwpx" {
     "ICWC 보고서 파일 확인 실패",
     "HWP, HWPX 또는 DOCX 파일만 업로드할 수 있습니다.",
   );
+}
+
+function getReportMimeType(extension: ".docx" | ".hwp" | ".hwpx"): string {
+  if (extension === ".docx") {
+    return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  }
+  if (extension === ".hwpx") return "application/vnd.hancom.hwpx";
+  return "application/x-hwp";
 }
 
 async function requireCurrentStudentAccount(
@@ -168,27 +184,88 @@ export async function createIcwcTeam(
   input: CreateIcwcTeamInput,
 ): Promise<IcwcTeam> {
   const teacherId = await requireAuthenticatedTeacherId(client);
-  const { data: team, error: teamError } = await client
+  const teamName = input.teamName.trim();
+  const studentIds = [...new Set(input.studentIds)];
+
+  if (!teamName) {
+    throw new DatabaseOperationError(
+      "ICWC 팀 생성 실패",
+      "팀 이름을 입력해 주세요.",
+    );
+  }
+
+  if (studentIds.length < 3 || studentIds.length > 4) {
+    throw new DatabaseOperationError(
+      "ICWC 팀 생성 실패",
+      "팀원은 3명 이상, 4명 이하로 선택해 주세요.",
+    );
+  }
+
+  const [{ data: students, error: studentError }, { data: memberships, error: membershipLookupError }] =
+    await Promise.all([
+      client
+        .from("students")
+        .select("id")
+        .eq("teacher_id", teacherId)
+        .in("id", studentIds),
+      client
+        .from("icwc_team_members")
+        .select("student_id")
+        .eq("activity_id", input.activityId)
+        .in("student_id", studentIds),
+    ]);
+  throwIfSupabaseError("ICWC 팀원 명단 확인 실패", studentError);
+  throwIfSupabaseError("ICWC 기존 팀 배정 확인 실패", membershipLookupError);
+
+  if (students.length !== studentIds.length) {
+    throw new DatabaseOperationError(
+      "ICWC 팀 생성 실패",
+      "담당 학생 명단에 없는 학생이 포함되어 있습니다.",
+    );
+  }
+
+  if (memberships.length > 0) {
+    throw new DatabaseOperationError(
+      "ICWC 팀 생성 실패",
+      "이미 다른 ICWC 팀에 배정된 학생이 포함되어 있습니다.",
+    );
+  }
+
+  // The team SELECT policy resolves access through the persisted team row.
+  // PostgREST's INSERT ... RETURNING wrapper evaluates that policy in the same
+  // statement, before the helper can see the new row. Insert first, then read
+  // it back in a separate request instead of chaining `.select()` here.
+  const teamId = crypto.randomUUID();
+  const { error: teamError } = await client
     .from("icwc_teams")
     .insert({
+      id: teamId,
       teacher_id: teacherId,
       activity_id: input.activityId,
-      team_name: input.teamName,
-    })
-    .select("*")
-    .single();
+      team_name: teamName,
+    });
   throwIfSupabaseError("ICWC 팀 생성 실패", teamError);
 
-  const studentIds = [...new Set(input.studentIds)];
-  if (studentIds.length > 0) {
-    const { error: memberError } = await client.from("icwc_team_members").insert(
-      studentIds.map((studentId) => ({
-        team_id: team.id,
-        teacher_id: teacherId,
-        activity_id: team.activity_id,
-        student_id: studentId,
-      })),
-    );
+  const { data: team, error: teamReadError } = await client
+    .from("icwc_teams")
+    .select("*")
+    .eq("id", teamId)
+    .single();
+  if (teamReadError) {
+    await client.from("icwc_teams").delete().eq("id", teamId);
+    throwIfSupabaseError("ICWC 팀 생성 결과 확인 실패", teamReadError);
+  }
+
+  const { error: memberError } = await client.from("icwc_team_members").insert(
+    studentIds.map((studentId) => ({
+      team_id: team.id,
+      teacher_id: teacherId,
+      activity_id: team.activity_id,
+      student_id: studentId,
+    })),
+  );
+  if (memberError) {
+    await client.from("icwc_teams").delete().eq("id", team.id);
     throwIfSupabaseError("ICWC 팀원 연결 실패", memberError);
   }
 
@@ -206,14 +283,17 @@ export async function deleteIcwcTeam(
 
 export async function getIcwcTeamMembers(
   client: AppSupabaseClient,
-  teamId: string,
+  teamId?: string,
 ): Promise<IcwcTeamMember[]> {
   await requireAuthenticatedUserId(client);
-  const { data, error } = await client
+  let query = client
     .from("icwc_team_members")
     .select("*")
-    .eq("team_id", teamId)
     .order("created_at");
+  if (teamId) {
+    query = query.eq("team_id", teamId);
+  }
+  const { data, error } = await query;
   throwIfSupabaseError("ICWC 팀원 조회 실패", error);
   return data.map(toIcwcTeamMember);
 }
@@ -258,12 +338,19 @@ export async function uploadIcwcTeamReportFile(
     );
   }
 
-  const extension = getReportExtension(input.mimeType);
+  // Windows and some browsers expose HWP as application/octet-stream.
+  // Normalize the Storage content type from the allow-listed extension; the
+  // report parser still validates that the uploaded body is a readable file.
+  const extension = getReportExtension(input.mimeType, input.originalName);
+  const contentType = getReportMimeType(extension);
+  const uploadBody = input.body instanceof Blob
+    ? input.body.slice(0, input.body.size, contentType)
+    : input.body;
   const path = `icwc/${input.teamId}/${crypto.randomUUID()}${extension}`;
   const { data, error } = await client.storage
     .from(REPORT_BUCKET)
-    .upload(path, input.body, {
-      contentType: input.mimeType,
+    .upload(path, uploadBody, {
+      contentType,
       upsert: false,
     });
   throwIfSupabaseError("ICWC 팀 보고서 파일 업로드 실패", error);
@@ -271,7 +358,7 @@ export async function uploadIcwcTeamReportFile(
   return {
     path: data.path,
     name: input.originalName,
-    mimeType: input.mimeType,
+    mimeType: contentType,
     sizeBytes,
   };
 }

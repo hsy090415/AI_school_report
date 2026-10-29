@@ -47,6 +47,16 @@ function readEntries(buffer: Buffer): ZipEntry[] {
   return entries;
 }
 
+/** Reads the ZIP central directory without inflating document attachments. */
+export function listZipEntryNames(bytes: Uint8Array): string[] {
+  try {
+    return readEntries(Buffer.from(bytes)).map((entry) => entry.name);
+  } catch (error) {
+    if (error instanceof AiRequestError) throw error;
+    throw new AiRequestError("INVALID_REQUEST", "압축 문서의 파일 목록을 읽을 수 없습니다.");
+  }
+}
+
 function readEntry(buffer: Buffer, entry: ZipEntry): Buffer {
   const offset = entry.localHeaderOffset;
   if (buffer.readUInt32LE(offset) !== LOCAL_FILE_HEADER_SIGNATURE) {

@@ -139,3 +139,11 @@ export function extractHwpParagraphs(bytes: Uint8Array): string[] {
     throw new AiRequestError("INVALID_REQUEST", "HWP 본문을 읽을 수 없습니다. 일반 HWP 5.0 파일 또는 DOCX로 저장해 주세요.");
   }
 }
+
+/**
+ * HWP 5.0 stores embedded pictures and other binary objects in BinData.
+ * Their visual contents are intentionally excluded from text extraction.
+ */
+export function hasHwpEmbeddedVisualContent(bytes: Uint8Array): boolean {
+  return Buffer.from(bytes).includes(Buffer.from("BinData", "utf16le"));
+}
