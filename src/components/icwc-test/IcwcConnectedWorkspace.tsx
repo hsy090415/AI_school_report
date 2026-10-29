@@ -744,7 +744,7 @@ function TeacherWorkspace(props: TeacherWorkspaceProps) {
       <span className={styles.fieldTitle}>초안 방향</span>
       <div className={styles.focusOptions}><button className={props.focus === "탐구내용 중심" ? styles.focusActive : ""} onClick={() => props.setFocus("탐구내용 중심")}>탐구내용 중심</button><button className={props.focus === "공동체역량 중심" ? styles.focusActive : ""} onClick={() => props.setFocus("공동체역량 중심")}>공동체역량 중심</button></div>
       <button className={styles.secondaryWide} disabled={!props.selectedSubmission || props.busy === "review"} onClick={props.saveReview}>{props.busy === "review" ? "저장 중…" : "코멘트·방향 저장"}</button>
-      <button className={styles.primaryWide} disabled={!props.selectedSubmission || props.busy === "generate" || props.busy === "review"} onClick={props.generateDraft}>{props.busy === "generate" ? "Groq 초안 생성 중…" : "AI 초안 생성 · 250자 목표"}</button>
+      <button className={styles.primaryWide} disabled={!props.selectedSubmission || props.busy === "generate" || props.busy === "review"} onClick={props.generateDraft}>{props.busy === "generate" ? "Gemini 초안 생성 중…" : "Gemini 초안 생성 · 250자 목표"}</button>
       {props.draftResult ? <section className={styles.draftReview} aria-label="AI 초안과 서버 검수 결과">
         <div className={styles.draftHeader}><h3>AI 검토용 초안</h3><small>{props.draftResult.characterCount}자 · {props.draftResult.byteCount}바이트 · 목표 {props.draftResult.maxLength}자</small></div>
         <p className={styles.draftText}>{props.draftResult.draft}</p>

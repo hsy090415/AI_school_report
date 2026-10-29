@@ -8,7 +8,7 @@ import { AiProviderError, AiRequestError } from "../../../../lib/ai/errors";
 import { aiErrorResponse, readJson } from "../../../../lib/ai/http";
 import { AIConfigurationError } from "../../../../lib/ai/config";
 import { createClient } from "../../../../lib/supabase/server";
-import { generateIcwcSecondYearDraft } from "../../../../services/ai/icwc-second-year-draft-writer";
+import { generateIcwcSecondYearGeminiDraft } from "../../../../services/ai/icwc-second-year-gemini-draft-writer";
 import { inspectIcwcDraft } from "../../../../services/ai/icwc-draft-validation";
 import { addIcwcDraftHistoryEntry, getIcwcDraftHistory, requireAuthenticatedTeacherId } from "../../../../services/database";
 
@@ -67,7 +67,7 @@ export async function POST(request: Request): Promise<Response> {
       return Response.json({ error: { message: "교사 코멘트와 초안 방향을 먼저 저장해 주세요." } }, { status: 409 });
     }
     const direction = review.draft_focus as (typeof ICWC_DRAFT_DIRECTIONS)[number];
-    const generated = await generateIcwcSecondYearDraft({
+    const generated = await generateIcwcSecondYearGeminiDraft({
       reportText: team.report_text,
       reflectionText: submission.reflection_text,
       teacherComment: review.teacher_comment,

@@ -54,6 +54,10 @@ function geminiConfig(): GeminiAIConfig {
   };
 }
 
+export function getGeminiAIConfig(): GeminiAIConfig {
+  return geminiConfig();
+}
+
 export function getReportAnalysisAIConfig(): ReportAnalysisAIConfig {
   const provider = selectedProvider("AI_ANALYSIS_PROVIDER");
 
