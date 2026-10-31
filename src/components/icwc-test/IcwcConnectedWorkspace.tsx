@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient, type AppSupabaseClient } from "../../lib/supabase/client";
 import {
   createIcwcTeam,
+  createSignedIcwcTeamReportUrl,
   ensureCurrentTeacherActivities,
   getCurrentStudentIcwcSubmission,
   getIcwcStudentReview,
@@ -60,6 +61,41 @@ function studentNumber(student: Student): string {
 
 function dateLabel(value: string | null): string {
   return value ? new Date(value).toLocaleString("ko-KR") : "";
+}
+
+function ReportDownloadButton({ teamId, fileName }: { teamId: string; fileName: string }) {
+  const [downloading, setDownloading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function download() {
+    if (downloading) return;
+    setDownloading(true);
+    setError("");
+    try {
+      const url = await createSignedIcwcTeamReportUrl(createClient(), teamId);
+      const response = await fetch(url);
+      if (!response.ok) throw new Error("원본 파일을 내려받지 못했습니다. 다시 시도해 주세요.");
+      const objectUrl = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    } catch (cause) {
+      setError(errorText(cause));
+    } finally {
+      setDownloading(false);
+    }
+  }
+
+  return <div className={styles.reportDownload}>
+    <button type="button" className={styles.secondary} disabled={downloading} onClick={() => void download()}>
+      {downloading ? "다운로드 준비 중…" : "원본 다운로드"}
+    </button>
+    {error ? <small role="alert">{error}</small> : null}
+  </div>;
 }
 
 function StatusMarker({ complete, label }: { complete: boolean; label: string }) {
@@ -732,7 +768,7 @@ function TeacherWorkspace(props: TeacherWorkspaceProps) {
     <section className={styles.submissionPanel}>
       <div className={styles.panelTitle}><div><p className={styles.eyebrow}>{props.selectedTeam?.teamName ?? "팀을 선택하세요"}</p><h1>{props.selectedStudent ? `${props.selectedStudent.name} 제출` : "학생을 선택하세요"}</h1></div></div>
       {props.selectedTeam ? <>
-        <div className={styles.documentCard}><span>팀 보고서</span><strong>{props.selectedTeam.reportFile?.name ?? "아직 제출되지 않았습니다"}</strong><small>{props.selectedTeam.submittedAt ? dateLabel(props.selectedTeam.submittedAt) : "팀원 중 한 명이 제출할 수 있습니다"}</small></div>
+        <div className={styles.documentCard}><span>팀 보고서</span><strong>{props.selectedTeam.reportFile?.name ?? "아직 제출되지 않았습니다"}</strong><small>{props.selectedTeam.submittedAt ? dateLabel(props.selectedTeam.submittedAt) : "팀원 중 한 명이 제출할 수 있습니다"}</small>{props.selectedTeam.reportFile ? <ReportDownloadButton key={props.selectedTeam.reportFile.path} teamId={props.selectedTeam.id} fileName={props.selectedTeam.reportFile.name} /> : null}</div>
         {props.selectedTeam.reportFile ? <ExtractedReportViewer reportText={props.selectedTeam.reportText} /> : null}
         {props.reportHasImages ? <p className={styles.imageWarning} role="alert">이미지 또는 시각 자료가 포함된 보고서입니다. 이미지 내용은 텍스트로 추출되지 않으므로, 평가 전 원문 파일도 확인해 주세요.</p> : null}
         <article className={styles.reflectionCard}><span>개인 소감문</span><p>{props.selectedSubmission?.reflectionText || "아직 작성된 소감문이 없습니다."}</p><small>{props.selectedSubmission?.submittedAt ? `제출 ${dateLabel(props.selectedSubmission.submittedAt)}` : "제출 대기"}</small></article>
@@ -795,6 +831,7 @@ function StudentWorkspace(props: StudentWorkspaceProps) {
         <article className={styles.panel}>
           <div className={styles.panelTitle}><div><p className={styles.eyebrow}>팀 공통</p><h2>보고서 업로드</h2></div><span className={props.selectedTeam.submittedAt ? styles.statusDone : styles.statusWaiting}>{props.selectedTeam.submittedAt ? "제출 완료" : "제출 전"}</span></div>
           {props.selectedTeam.submittedAt ? <div className={styles.uploadedFile}><strong>{props.selectedTeam.reportFile?.name ?? "보고서"}</strong><small>{dateLabel(props.selectedTeam.submittedAt)}</small><label className={styles.replaceFile}><input type="file" accept=".hwp,.docx" onChange={(event) => props.setReportFile(event.target.files?.[0] ?? null)} /><span>파일 교체</span></label>{props.reportFile ? <em>교체 예정: {props.reportFile.name}</em> : null}</div> : <label className={styles.dropzone}><input type="file" accept=".hwp,.docx" onChange={(event) => props.setReportFile(event.target.files?.[0] ?? null)} /><span>HWP 또는 DOCX 파일 선택</span><small>최대 10MB · 팀원 한 명만 업로드하면 됩니다</small>{props.reportFile ? <strong>{props.reportFile.name}</strong> : null}</label>}
+          {props.selectedTeam.reportFile ? <ReportDownloadButton key={props.selectedTeam.reportFile.path} teamId={props.selectedTeam.id} fileName={props.selectedTeam.reportFile.name} /> : null}
         </article>
         <article className={styles.panel}>
           <div className={styles.panelTitle}><div><p className={styles.eyebrow}>개인 작성</p><h2>나의 소감문</h2></div><span className={props.ownSubmission?.submittedAt ? styles.statusDone : styles.statusWaiting}>{props.ownSubmission?.submittedAt ? "제출 완료" : "작성 중"}</span></div>
